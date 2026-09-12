@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sudoku">
+<meta name="theme-color" content="#f5f7fb">
+<title>Sudoku — No Ads</title>
+<style>
+:root{
+  --bg:#f5f7fb;--card:#fff;--ink:#0f172a;--muted:#667085;--line:#cbd5e1;
+  --heavy:#475569;--accent:#2563eb;--accent-soft:#dbeafe;--peer:#eff6ff;
+  --bad:#fee2e2;--bad-ink:#b91c1c;--given:#111827;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body{min-height:100dvh}
+button,select{font:inherit}
+.wrap{max-width:620px;margin:auto;padding:max(14px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}
+header{display:flex;align-items:flex-end;justify-content:space-between;margin:0 2px 14px}
+h1{font-size:clamp(34px,10vw,50px);line-height:.95;margin:0;font-weight:850;letter-spacing:-1.5px}
+.tag{margin-top:7px;color:var(--muted);font-size:14px}
+#timer{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.top{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+select,.top button,.actions button{
+  border:0;background:var(--card);color:var(--ink);border-radius:16px;padding:13px 12px;
+  font-weight:750;box-shadow:0 2px 10px rgba(15,23,42,.08)
+}
+select{grid-column:1/-1;appearance:auto}
+.board{
+  width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);
+  border:3px solid var(--heavy);border-radius:12px;overflow:hidden;background:var(--heavy);
+  box-shadow:0 8px 28px rgba(15,23,42,.13)
+}
+.cell{
+  position:relative;display:flex;align-items:center;justify-content:center;background:#fff;
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-size:clamp(20px,7.3vw,34px);font-weight:650;cursor:pointer;user-select:none;touch-action:manipulation
+}
+.cell:nth-child(3n){border-right:3px solid var(--heavy)}
+.cell:nth-child(9n){border-right:0}
+.cell:nth-child(n+19):nth-child(-n+27),
+.cell:nth-child(n+46):nth-child(-n+54){border-bottom:3px solid var(--heavy)}
+.cell:nth-child(n+73){border-bottom:0}
+.cell.given{font-weight:850;color:var(--given);background:#f8fafc}
+.cell.peer{background:var(--peer)}
+.cell.same{background:var(--accent-soft)}
+.cell.sel{outline:3px solid var(--accent);outline-offset:-3px;z-index:3}
+.cell.bad{background:var(--bad);color:var(--bad-ink)}
+.notes{position:absolute;inset:3px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);font-size:clamp(7px,2.3vw,12px);font-weight:700;color:#64748b}
+.note{display:flex;align-items:center;justify-content:center}
+#status{min-height:28px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-weight:700;font-size:14px;margin:9px 0 4px}
+.pad{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;margin:5px 0 10px}
+.pad button{
+  border:0;border-radius:12px;background:#fff;color:var(--ink);font-size:22px;font-weight:800;
+  padding:12px 0;box-shadow:0 2px 8px rgba(15,23,42,.08);touch-action:manipulation
+}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.actions .active{background:var(--accent-soft);color:var(--accent)}
+.actions .primary{background:var(--accent);color:#fff}
+.foot{color:var(--muted);text-align:center;font-size:12px;margin-top:13px}
+@media(max-width:430px){.actions{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <div><h1>Sudoku</h1><div class="tag">No ads. No tracking.</div></div>
+    <div id="timer">00:00</div>
+  </header>
+
+  <section class="top">
+    <select id="difficulty" aria-label="Difficulty">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+    <button id="new">New game</button>
+    <button id="reset">Reset</button>
+  </section>
+
+  <section id="board" class="board" aria-label="Sudoku grid"></section>
+  <div id="status">Tap a cell, then a number.</div>
+  <section id="pad" class="pad" aria-label="Number pad"></section>
+
+  <section class="actions">
+    <button id="notes">Notes: Off</button>
+    <button id="erase">Erase</button>
+    <button id="check">Check</button>
+    <button id="hint" class="primary">Hint</button>
+  </section>
+
+  <div class="foot">Progress is saved on this iPhone.</div>
+</main>
+
+<script>
+"use strict";
+const BANK={
+easy:[
+"530070000600195000098000060800060003400803001700020006060000280000419005000080079",
+"006800040100000008000102000090005070007000300030700050000309000900000002080004700",
+"004006000000020300900100070090004000600000001000900020040008006002030000000500800"
+],
+medium:[
+"000260701680070090190004500820100040004602900050003028009300074040050036703018000",
+"200080300060070084030500209000105408000000000402706000301007040720040060004010003",
+"000000907000420180000705026100904000050000040000507009920108000034059000507000000"
+],
+hard:[
+"005300000800000020070010500400005300010070006003200080060500009004000030000009700",
+"000000010400000000020000000000050407008000300001090000300400200050100000000806000",
+"000005000000000310190080000000600040000003007000020800100000005003000000000400200"
+]};
+
+const board=document.getElementById("board");
+const pad=document.getElementById("pad");
+const difficulty=document.getElementById("difficulty");
+const statusEl=document.getElementById("status");
+const timerEl=document.getElementById("timer");
+const notesBtn=document.getElementById("notes");
+
+let puzzle="",solution="",values=[],memo=[],selected=-1,noteMode=false,seconds=0,timerHandle=null;
+
+function solve(s){
+  const a=[...s].map(Number);
+  function ok(i,n){
+    const r=(i/9)|0,c=i%9;
+    for(let k=0;k<9;k++) if(a[r*9+k]===n||a[k*9+c]===n) return false;
+    const br=((r/3)|0)*3,bc=((c/3)|0)*3;
+    for(let rr=br;rr<br+3;rr++) for(let cc=bc;cc<bc+3;cc++) if(a[rr*9+cc]===n) return false;
+    return true;
+  }
+  function go(){
+    const i=a.indexOf(0);
+    if(i<0) return true;
+    for(let n=1;n<=9;n++){
+      if(ok(i,n)){
+        a[i]=n;
+        if(go()) return true;
+        a[i]=0;
+      }
+    }
+    return false;
+  }
+  go();
+  return a.join("");
+}
+
+function storageKey(){return "sudoku-no-ads-v3"}
+
+function save(){
+  try{
+    localStorage.setItem(storageKey(),JSON.stringify({
+      puzzle,solution,values,memo:memo.map(s=>[...s]),seconds,difficulty:difficulty.value
+    }));
+  }catch(e){}
+}
+
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(storageKey())||"null");
+    if(!d||!d.puzzle||!Array.isArray(d.values)||d.values.length!==81) return false;
+    puzzle=d.puzzle;
+    solution=d.solution||solve(puzzle);
+    values=d.values;
+    memo=(d.memo||Array.from({length:81},()=>[])).map(a=>new Set(a));
+    seconds=d.seconds||0;
+    difficulty.value=d.difficulty||"medium";
+    return true;
+  }catch(e){return false}
+}
+
+function restartTimer(){
+  if(timerHandle) clearInterval(timerHandle);
+  showTime();
+  timerHandle=setInterval(()=>{
+    seconds++;
+    showTime();
+    if(seconds%5===0) save();
+  },1000);
+}
+function showTime(){
+  timerEl.textContent=String((seconds/60)|0).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+}
+
+function newGame(){
+  const list=BANK[difficulty.value];
+  const old=puzzle;
+  let p=list[(Math.random()*list.length)|0];
+  if(list.length>1){
+    let guard=0;
+    while(p===old && guard++<20) p=list[(Math.random()*list.length)|0];
+  }
+  puzzle=p;
+  solution=solve(puzzle);
+  values=[...puzzle];
+  memo=Array.from({length:81},()=>new Set());
+  selected=-1;
+  noteMode=false;
+  seconds=0;
+  notesBtn.classList.remove("active");
+  notesBtn.textContent="Notes: Off";
+  statusEl.textContent="Tap a cell, then a number.";
+  restartTimer();
+  render();
+  save();
+}
+
+function isPeer(a,b){
+  if(a<0) return false;
+  const r1=(a/9)|0,c1=a%9,r2=(b/9)|0,c2=b%9;
+  return r1===r2 || c1===c2 ||
+    ((((r1/3)|0)===((r2/3)|0)) && (((c1/3)|0)===((c2/3)|0)));
+}
+
+function render(){
+  board.innerHTML="";
+  const sv=selected>=0?values[selected]:"0";
+  for(let i=0;i<81;i++){
+    const c=document.createElement("div");
+    c.className="cell";
+    if(puzzle[i]!=="0") c.classList.add("given");
+    if(i===selected) c.classList.add("sel");
+    else if(isPeer(selected,i)) c.classList.add("peer");
+    if(sv!=="0"&&values[i]===sv) c.classList.add("same");
+
+    if(values[i]!=="0"){
+      c.textContent=values[i];
+    } else if(memo[i].size){
+      const n=document.createElement("div");
+      n.className="notes";
+      for(let x=1;x<=9;x++){
+        const q=document.createElement("div");
+        q.className="note";
+        q.textContent=memo[i].has(x)?x:"";
+        n.appendChild(q);
+      }
+      c.appendChild(n);
+    }
+    c.addEventListener("click",()=>{selected=i;render();});
+    board.appendChild(c);
+  }
+}
+
+function put(n){
+  if(selected<0||puzzle[selected]!=="0") return;
+  if(noteMode){
+    values[selected]="0";
+    if(memo[selected].has(n)) memo[selected].delete(n);
+    else memo[selected].add(n);
+  }else{
+    values[selected]=String(n);
+    memo[selected].clear();
+    memo.forEach((s,i)=>{if(isPeer(selected,i)) s.delete(n);});
+  }
+  statusEl.textContent="";
+  render();
+  save();
+  checkWin();
+}
+
+function eraseCell(){
+  if(selected<0||puzzle[selected]!=="0") return;
+  values[selected]="0";
+  memo[selected].clear();
+  render();
+  save();
+}
+
+function checkBoard(){
+  const cells=[...board.children];
+  let bad=0,filled=0;
+  values.forEach((v,i)=>{
+    if(v!=="0"){
+      filled++;
+      if(puzzle[i]==="0"&&v!==solution[i]){
+        cells[i].classList.add("bad");
+        bad++;
+      }
+    }
+  });
+  statusEl.textContent=bad?`${bad} mistake${bad===1?"":"s"} highlighted.`:
+    filled===81?"Perfect.":"No mistakes so far.";
+}
+
+function giveHint(){
+  if(selected<0||puzzle[selected]!=="0"||values[selected]!=="0"){
+    const empties=values.map((v,i)=>v==="0"&&puzzle[i]==="0"?i:-1).filter(i=>i>=0);
+    if(!empties.length) return;
+    selected=empties[(Math.random()*empties.length)|0];
+  }
+  values[selected]=solution[selected];
+  memo[selected].clear();
+  render();
+  save();
+  checkWin();
+}
+
+function checkWin(){
+  if(values.join("")===solution){
+    if(timerHandle) clearInterval(timerHandle);
+    statusEl.textContent=`Solved in ${timerEl.textContent}! 🎉`;
+    save();
+  }
+}
+
+for(let n=1;n<=9;n++){
+  const b=document.createElement("button");
+  b.textContent=n;
+  b.setAttribute("aria-label",`Enter ${n}`);
+  b.addEventListener("click",()=>put(n));
+  pad.appendChild(b);
+}
+
+document.getElementById("new").addEventListener("click",newGame);
+document.getElementById("reset").addEventListener("click",()=>{
+  values=[...puzzle];
+  memo=Array.from({length:81},()=>new Set());
+  selected=-1;
+  seconds=0;
+  statusEl.textContent="Puzzle reset.";
+  restartTimer();
+  render();
+  save();
+});
+document.getElementById("erase").addEventListener("click",eraseCell);
+document.getElementById("check").addEventListener("click",checkBoard);
+document.getElementById("hint").addEventListener("click",giveHint);
+notesBtn.addEventListener("click",()=>{
+  noteMode=!noteMode;
+  notesBtn.classList.toggle("active",noteMode);
+  notesBtn.textContent=`Notes: ${noteMode?"On":"Off"}`;
+});
+difficulty.addEventListener("change",newGame);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)save();});
+window.addEventListener("beforeunload",save);
+
+if(load()){
+  render();
+  restartTimer();
+}else{
+  newGame();
+}
+</script>
+</body>
+</html>
